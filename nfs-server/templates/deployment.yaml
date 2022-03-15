@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nfs-server.fullname" . }}
+  labels:
+    {{- include "nfs-server.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nfs-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "nfs-server.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nfs-server.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              add: ["SYS_ADMIN", "SETPCAP"]
+          ports:
+            - containerPort: 2049
+              name: nfs
+              protocol: UDP
+            - containerPort: 2049
+              name: nfs-tcp
+              protocol: TCP
+            - containerPort: 111
+              name: rpc
+              protocol: UDP
+            - containerPort: 111
+              name: rpc-tcp
+              protocol: TCP
+            - containerPort: 32765
+              name: statd-in
+              protocol: TCP
+            - containerPort: 32766
+              name: statd-out
+              protocol: TCP
+            - containerPort: 32767
+              name: mountd
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+              - ls
+              - /etc
+          readinessProbe:
+            exec:
+              command:
+              - ls
+              - /etc
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data-nfs-server
+              mountPath: /data
+      volumes:
+        - name: data-nfs-server
+          persistentVolumeClaim:
+            claimName: my-nfs-server
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
